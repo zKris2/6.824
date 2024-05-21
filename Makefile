@@ -1,26 +1,28 @@
-# 定义变量
-CXX = g++
-CXXFLAGS = -std=c++14 -pthread
+# 定义编译器和编译标志
+CC = g++
+CFLAGS = -Wall -g -std=c++11
 
-# 目标文件
-TARGET = MapReduce
-OBJS = $(patsubst *.cpp, %.o,$(wildcard src/*.cpp))
-# 测试文件
-TEST = $(patsubst *.cpp, %.o,$(wildcard test/*.cpp))
+# 定义lzmq和buttonrpc的库路径和链接标志
+LIBS = -lzmq -lpthread
 
-# 编译目标
-$(TARGET):$(OBJS)
-	$(CXX) $(CXXFLAGS) -o bin/$@ $^
+# 定义目标可执行文件
+TARGET_MASTER = master
+TARGET_WORKER = worker
+BINDIR = bin
 
-# 编译源文件
-$(OBJS):
-	$(CXX) -c $(CXXFLAGS) -o $@$<
-	
+# 定义所有目标和依赖
+all: $(BINDIR)/$(TARGET_MASTER) $(BINDIR)/$(TARGET_WORKER)
+
+# 编译master目标
+$(BINDIR)/$(TARGET_MASTER): src/master.cpp
+	@mkdir -p $(BINDIR)
+	$(CC) $(CFLAGS) $< $(LIBS) -o $@
+
+# 编译worker目标
+$(BINDIR)/$(TARGET_WORKER): src/worker.cpp
+	@mkdir -p $(BINDIR)
+	$(CC) $(CFLAGS) $< $(LIBS) -o $@
 
 # 清理目标
 clean:
-	rm -rf bin/$(TARGET) $(OBJS)
-
-# 默认目标，包括构建和执行
-default:
-	bin/$(TARGET)
+	rm -f $(BINDIR)/$(TARGET_MASTER) $(BINDIR)/$(TARGET_WORKER)
