@@ -22,8 +22,10 @@ class Master{
 
 		std::string assignTask();//分配map任务，RPC
                 void waitTime(std::string type);
-                void* waitMapTask();
+		void waitMap(char* file);
+                void checkMapTask(char* file);
 
+		void setMapState(std::string file);
 	private:
 		bool m_done;
 		int m_fileNum;//命令行文件数
@@ -79,10 +81,25 @@ void Master::waitTime(std::string type){
         }
 };
 
-void* Master::waitMapTask(){
-        std::thread t(&Master::waitTime,this,"map");
-        t.join();//join方式回收实现超时后解除阻塞
-        return nullptr;
+void Master::waitMap(char* file){
+        m_runningMaps.emplace_back(std::string(file));//加入正在运行的map任务队列
+
+        std::thread t(&Master::checkMapTask,this,file); //创建线程来检测任务是否完成
+        t.detach();//join方式回收实现超时后解除阻塞
+}
+
+void Master::checkMapTask(char* file){
+	std::thread t(&Master::waitTime,this,"map");
+	t.join();//阻塞，等待超时
+	//超时后检查是否已完成
+	if(!m_finishedMaps.count(std::string(file))){
+		//未完成
+		std::cout << "task file[" << file << "] is timeout!" << std::endl;
+		//重新加入map任务队列
+		m_maps.push(file);
+		return;
+	}
+	std::cout << "task file[" << file <<"] is finished!" << std::endl;
 }
 
 std::string Master::assignTask(){
@@ -92,12 +109,16 @@ std::string Master::assignTask(){
                 char* file = m_maps.front();//从工作队列取出一个待map的文件名
                 std::cout << "  assign task [file] : "<< file << std::endl;
                 m_maps.pop();
-                m_runningMaps.emplace_back(std::string(file));//加入正在运行的map任务队列
+		waitMap(file);
                 return std::string(file);
         }
         return "empty";
 };
 
+
+void Master::setMapState(std::string file){
+	m_finishedMaps[file] = 1;
+}
 
 int main(int argc,char* argv[]) {
         buttonrpc s;
@@ -108,7 +129,7 @@ int main(int argc,char* argv[]) {
         s.bind("getMapNum",&Master::getMapNum,&master);
         s.bind("getReduceNum",&Master::getReduceNum,&master);
         s.bind("assignTask",&Master::assignTask,&master);
-
+	s.bind("setMapState",&Master::setMapState,&master);
 
         s.run();
         return 0;
