@@ -12,27 +12,30 @@
 // 中间文件
 int outNum = 1;
 
-bool writeToDisk(std::map<std::string,int> interMap,std::string file){
-	
-	std::stringstream ss;
-	ss << "inter-map-" << outNum;
-	std::string outfile = ss.str();
-	char* outf;
-	strcpy(outf,outfile.c_str());
 
-	std::cout<< "outf : " <<outf<<std::endl;
-	std::ofstream ofs(outf);
+
+bool writeToDisk(std::map<std::string,int>& interMap , string file){
 	
+	std::string outfile = "inter-map-"+ std::to_string(outNum);
+	std::cout<< "outf : " <<outfile<<std::endl;
+	std::ofstream ofs(outfile);
 	//------------------- 测试map失败情况（master重新加入map任务队列）-----------------
 	if(outNum==1){
 		std::cout << "map inter error" << std::endl;
 		outNum++;
-		std::this_thread::sleep_for(std::chrono::seconds(3));
+		//std::this_thread::sleep_for(std::chrono::seconds(3));
+		 // 尝试删除文件
+		if (std::remove(outfile.c_str()) == 0) {
+			std::cout << "delete file success!" << std::endl;
+		} else {
+			std::cout << "delete file error!" << std::endl;
+		}
+		std::cout << "close ofs"<<std::endl;
+		ofs.close();
 		return false;
 	}
 	//------------------- 测试map失败情况（master重新加入map任务队列）-----------------
 	
-
 	if(!ofs.is_open()){
 		return false;		
 	}
@@ -50,6 +53,7 @@ void Map(){
         
 	std::map<std::string,int> interMap;
 	while(1){
+		interMap.clear();
                 bool ret = client.call<bool>("isMapDone").val();
                 if(ret){
                         std::cout << "No Task,finished!" << std::endl;
@@ -73,13 +77,15 @@ void Map(){
 				interMap[word]++;
 			}
 		}
+	
 		//生成中间文件
 		if(!writeToDisk(interMap,task)){
+			client.call<void>("setMapState",task,false);
 			continue;	
 		}
 		
 		//通知master
-		client.call<std::string>("setMapState",task);
+		client.call<void>("setMapState",task,true);
 		std::cout << "map is finished!" << std::endl;
         }
 }
@@ -102,9 +108,10 @@ int main(){
         int ret1 = client.call<int>("getReduceNum").val();
         std::cout << "mapNum:" << ret << " reduceNum:" << ret1 << std::endl;
 
-	for(int i = 0 ; i < ret; i++){
-		std::thread t(Map);
-		t.detach();
-	}
-	std::this_thread::sleep_for(std::chrono::seconds(5));
+	Map();
+	//for(int i = 0 ; i < ret; i++){
+	//	std::thread t(Map);
+	//	t.detach();
+	//}
+	//std::this_thread::sleep_for(std::chrono::seconds(5));
 };

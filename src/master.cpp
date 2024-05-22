@@ -25,7 +25,7 @@ class Master{
 		void waitMap(char* file);
                 void checkMapTask(char* file);
 
-		void setMapState(std::string file);
+		void setMapState(std::string file,bool state);
 	private:
 		bool m_done;
 		int m_fileNum;//命令行文件数
@@ -44,7 +44,8 @@ class Master{
 };
 
 bool Master::isMapDone(){
-        if(m_finishedMaps.size()!=m_fileNum){
+       	std::cout<< "fisished task = " << m_finishedMaps.size() <<std::endl; 
+	if(m_finishedMaps.size()!=m_fileNum){
                 return false;
         }
         return true;
@@ -97,6 +98,7 @@ void Master::checkMapTask(char* file){
 		std::cout << "task file[" << file << "] is timeout!" << std::endl;
 		//重新加入map任务队列
 		m_maps.push(file);
+		std::cout << "readd task file[" << file << "]" << std::endl;  
 		return;
 	}
 	std::cout << "task file[" << file <<"] is finished!" << std::endl;
@@ -109,15 +111,27 @@ std::string Master::assignTask(){
                 char* file = m_maps.front();//从工作队列取出一个待map的文件名
                 std::cout << "  assign task [file] : "<< file << std::endl;
                 m_maps.pop();
-		waitMap(file);
+		// waitMap(file);
+		m_runningMaps.emplace_back(std::string(file));
                 return std::string(file);
         }
         return "empty";
 };
 
 
-void Master::setMapState(std::string file){
-	m_finishedMaps[file] = 1;
+void Master::setMapState(string file,bool state){
+	std::cout << "get notify : " << file << " - " << state <<std::endl; 
+	if(state){
+		m_finishedMaps[file] = 1;
+		std::cout << "task file[" << file <<"] is finished!" << std::endl;
+	} else {
+		//未完成
+                //重新加入map任务队列
+		char* refile=new char[file.length()+1];
+		strcpy(refile,file.c_str());
+                m_maps.push(refile);
+                std::cout << "readd task file[" << file << "]" << std::endl;
+	} 
 }
 
 int main(int argc,char* argv[]) {
