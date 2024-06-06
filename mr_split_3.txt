@@ -3548,6 +3548,7 @@ own.] : 1
 owner : 3
 owner, : 1
 owns : 2
+pa : 1
 pack : 1
 page : 3
 pages : 1
@@ -3563,7 +3564,7 @@ paper : 1
 papers : 1
 papers. : 1
 paperwork : 1
-paragraph : 10
+paragraph : 9
 paragraphs : 3
 parasol.] : 1
 parcel? : 1
@@ -3836,6 +3837,7 @@ quietly : 1
 quite : 59
 quite, : 3
 radically : 1
+ragraph : 1
 railway : 4
 ranks : 1
 rapidly.] : 1
