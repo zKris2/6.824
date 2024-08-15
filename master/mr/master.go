@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
-	"os"
 	"time"
 
 	mrpc "mit6.824/rpc"
@@ -63,17 +62,18 @@ func (m *Master) GenerateTaskId() int {
 }
 
 func (m *Master) GetTask(args *mrpc.TaskRequest, reply *mrpc.TaskResponse) error {
+	reply.Name = "aaa"
 	return nil
 }
 
 func (m *Master) server() {
 	rpc.Register(m)
 	rpc.HandleHTTP()
-	//l, e := net.Listen("tcp", ":1234")
-	sockname := mrpc.MasterSocket()
-	fmt.Println("unix sockname:", sockname)
-	os.Remove(sockname)
-	l, e := net.Listen("unix", sockname)
+	l, e := net.Listen("tcp", "127.0.0.1"+":1234")
+	// sockname := mrpc.MasterSocket()
+	// fmt.Println("unix sockname:", sockname)
+	// os.Remove(sockname)
+	// l, e := net.Listen("unix", sockname)
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
@@ -82,7 +82,7 @@ func (m *Master) server() {
 
 // if the entire job has finished.
 func (m *Master) Done() bool {
-	ret := true
+	ret := false
 
 	// Your code here.
 
