@@ -6,7 +6,7 @@ RACE=
 (cd worker && go build $RACE mrworker.go) || exit 1
 
 echo '***' Starting master.
-timeout -k 2s 180s ./master/mrmaster ../pg*txt &
+timeout -k 2s 180s ./master/mrmaster ./master/pg*.txt &
 
 # give the master time to create the sockets.
 sleep 1

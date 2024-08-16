@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
+	"strconv"
 	"time"
 
 	mrpc "mit6.824/rpc"
@@ -19,6 +20,12 @@ type TaskState int
 
 // MapReduce执行到的阶段
 type Phase int
+
+// 枚举任务类型
+const (
+	MapTask TaskType = iota
+	ReduceTask
+)
 
 // 枚举任务状态
 const (
@@ -54,6 +61,27 @@ type Master struct {
 	ReducerNum        int           // 传入的reducer的数量，用于hash
 }
 
+// Master生成Map任务
+func (m *Master) MakeMapTask(files []string) {
+	fmt.Println("begin make map tasks...")
+
+	// 遍历输入的文本文件，向map管道中加入map任务
+	for _, file := range files {
+		fmt.Println("filename:", file)
+		id := m.GenerateTaskId()
+		input := []string{file}
+		mapTask := Task{
+			TaskId:     id,
+			TaskType:   MapTask,
+			TaskState:  Waiting, // 尚未分配给worker时任务状态为waiting
+			InputFile:  input,   // map情况切片里面就一个分配给worker的文件
+			ReducerNum: m.ReducerNum,
+		}
+		fmt.Printf("make a map task %d\n", id)
+		m.MapTaskChannel <- &mapTask
+	}
+}
+
 // 通过自增产生TaskId
 func (m *Master) GenerateTaskId() int {
 	res := m.TaskIdForGen
@@ -62,7 +90,7 @@ func (m *Master) GenerateTaskId() int {
 }
 
 func (m *Master) GetTask(args *mrpc.TaskRequest, reply *mrpc.TaskResponse) error {
-	reply.Name = "aaa"
+	reply.Name = strconv.Itoa(args.X)
 	return nil
 }
 
@@ -100,6 +128,9 @@ func MakeMaster(files []string, nReduce int) *Master {
 		MapperNum:         len(files),
 		ReducerNum:        nReduce,
 	}
+
+	m.MakeMapTask(files)
+
 	m.server()
 	return &m
 }
