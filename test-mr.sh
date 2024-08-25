@@ -1,7 +1,8 @@
 #!/bin/bash
 
-RACE=
+RACE=-race
 
+(cd mrapps && go build $RACE -buildmode=plugin wc.go) || exit 1
 (cd main && go build $RACE mrmaster.go) || exit 1
 (cd main && go build $RACE mrworker.go) || exit 1
 
@@ -16,7 +17,7 @@ echo '***' Starting worker.
 # start multiple workers
 for i in {1..3}; do
     echo "Starting worker $i"
-    timeout -k 2s 30s main/mrworker ../../mrapps/wc.so &
+    timeout -k 2s 30s main/mrworker mrapps/wc.so &
 done
 # wait for one of the processes to exit.
 # under bash, this waits for all processes,
