@@ -206,6 +206,7 @@ func (m *Master) MakeReduceTask() {
 	rn := m.ReducerNum
 	// Getwd返回一个对应当前工作目录的根路径
 	dir, _ := os.Getwd()
+	time.Sleep(10 * time.Second)
 	files, err := os.ReadDir(dir) // files为当前目录下所有的文件
 	if err != nil {
 		fmt.Println(err)
@@ -220,7 +221,6 @@ func (m *Master) MakeReduceTask() {
 				input = append(input, file.Name())
 			}
 		}
-
 		reduceTask := Task{
 			TaskId:     id,
 			TaskType:   ReduceTask,
@@ -281,12 +281,14 @@ func (m *Master) server() {
 	go http.Serve(l, nil)
 }
 
-// if the entire job has finished.
+// main/mrmaster.go 周期性地调用 Done() 来检查整个工作
 func (m *Master) Done() bool {
 	ret := false
-
-	// Your code here.
-
+	mutex.Lock() // 先加锁，因为master在执行其他过程中也可能正在访问CurrentPhase
+	defer mutex.Unlock()
+	if m.CurrentPhase == AllDone {
+		ret = true
+	}
 	return ret
 }
 

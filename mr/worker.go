@@ -8,9 +8,20 @@ import (
 	"log"
 	"net/rpc"
 	"os"
+	"sort"
 	"strconv"
 	"time"
 )
+
+// for sorting by key.
+// 定义序列类型
+type ByKey []KeyValue
+
+// for sorting by key.
+// 定义排序三要素
+func (a ByKey) Len() int           { return len(a) }
+func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 // Map functions return a slice of KeyValue.
 type KeyValue struct {
@@ -24,6 +35,81 @@ func ihash(key string) int {
 	h := fnv.New32a()
 	h.Write([]byte(key))
 	return int(h.Sum32() & 0x7fffffff)
+}
+
+// shuffle函数，将一个reduce任务的所有输入中间文件中的kv排序
+func shuffle(files []string) []KeyValue {
+	kva := []KeyValue{}              // 存储该reduce任务所有输入的中间文件中的kv
+	for _, filename := range files { // reduce阶段每个worker的输入为若干个中间文件
+		file, err := os.Open(filename)
+		if err != nil {
+			log.Fatalf("cannot open %v", filename)
+		}
+
+		// 反序列化JSON格式文件
+		dec := json.NewDecoder(file)
+		// 读取文件内容
+		for {
+			var kv KeyValue
+			// func (dec *Decoder) Decode(v interface{}) error
+			// Decode从输入流读取下一个json编码值并保存在v指向的值里
+			err := dec.Decode(&kv)
+			if err != nil {
+				break
+			}
+			kva = append(kva, kv) // 将中间文件的每组kv都写入kva
+		}
+		file.Close()
+	}
+	// 此时kva存放了该reduce任务的所有输入中间文件中的kv
+	// 将中间键值对按key排序
+	sort.Sort(ByKey(kva)) // 排序后kva形如：[{a,1},{a,1},{b,1},{c,1}...]
+	return kva
+}
+
+// 执行reduce任务
+func PerformReduceTask(reducef func(string, []string) string, task *Task) {
+	intermediate := []KeyValue{} // 存储该reduce任务所有输入的中间文件中的kv（后需对其排序）
+
+	intermediate = shuffle(task.InputFile) // 对reduce的所有输入中间文件洗牌得到一个有序的kv切片
+
+	// 为了确保没有人在出现崩溃的情况下观察到部分写入的文件，MapReduce论文提到了使用临时文件并在完成写入后原子地重命名它的技巧
+	// 使用 ioutil.TempFile 来创建一个临时文件以及 os.Rename 来原子性地重命名它
+
+	dir, _ := os.Getwd()
+	// CreateTemp 在目录dir中新建一个临时文件，打开文件进行读写，返回结果文件
+	// pattern 这是用于生成临时文件的名称。该名称是通过在模式的末尾附加一个随机字符串来创建的
+	tmpfile, err := os.CreateTemp(dir, "mr-out-tmpfile-")
+	if err != nil {
+		log.Fatal("failed to create temp file", err)
+	}
+
+	// 对中间键值对中每个不同的key调用一次reduce，注意此时intermediate已经按key排好序了
+	i := 0
+	for i < len(intermediate) {
+		j := i + 1
+		// 如果i,j指向的两个key相同则继续向后寻找不同的key
+		for j < len(intermediate) && intermediate[j].Key == intermediate[i].Key {
+			j++
+		}
+		values := []string{}     // len为0的切片
+		for k := i; k < j; k++ { // 最后values形如{1，1，1，...}
+			values = append(values, intermediate[k].Value)
+		}
+		output := reducef(intermediate[i].Key, values) // 调用传入的reduce函数，输出的结果是该单词在这些文本中出现的次数
+
+		// this is the correct format for each line of Reduce output.
+		// 将reduce的输出写入临时文件
+		// Fprintf根据format参数生成格式化的字符串并写入w。返回写入的字节数和遇到的任何错误
+		fmt.Fprintf(tmpfile, "%v %v\n", intermediate[i].Key, output)
+		i = j
+	}
+	tmpfile.Close()
+
+	// reudce的输出文件，命名格式为：mr-out-*，其中*通过task记录的ReducerKth获取
+	oname := "mr-out-" + strconv.Itoa(task.ReducerKth)
+
+	os.Rename(dir+tmpfile.Name(), dir+oname)
 }
 
 // 执行map任务
@@ -69,10 +155,8 @@ func PerformMapTask(mapf func(string, string) []KeyValue, task *Task) {
 
 // 传入mapf，reducef
 func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string) string) {
-
 	// workers周期性地向master请求任务，每次请求之间休眠 time.Sleep()
 	loop := true
-
 	for loop {
 		re := CallGetTask()
 		switch re.Answer {
@@ -84,9 +168,9 @@ func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string)
 				PerformMapTask(mapf, &task)
 				FinishTaskAndReport(task.TaskId)
 			case ReduceTask: // reduce任务
-				// fmt.Printf("A worker get a reduce task and taskId is %d\n", task.TaskId)
-				// PerformReduceTask(reducef, &task)
-				// FinishTaskAndReport(task.TaskId)
+				fmt.Printf("A worker get a reduce task and taskId is %d\n", task.TaskId)
+				PerformReduceTask(reducef, &task)
+				FinishTaskAndReport(task.TaskId)
 			}
 		case WaitPlz: // 本次请求并未分得任务，worker等待1s后再下次请求
 			time.Sleep(time.Second)
