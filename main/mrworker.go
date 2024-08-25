@@ -11,5 +11,5 @@ func main() {
 	// }
 
 	//rpc call
-	mr.CallGetTask()
+	mr.Worker()
 }

@@ -12,23 +12,35 @@ type KeyValue struct {
 	Value string
 }
 
-func CallGetTask() {
-	// declare an argument structure.
-	args := TaskRequest{}
+func Worker() {
+	for {
+		args := TaskRequest{}
+		reply := TaskResponse{}
+		CallGetTask(&args, &reply)
+		if reply.Answer == FinishAndExit {
+			return
+		}
+		//TODO 完成任务通知master UpdateTaskState
+		FinishTaskAndReport(reply.Task.TaskId)
+	}
+}
 
-	// fill in the argument(s).
-	args.X = 99
+// worker完成任务后调用RPC告知master并请求修改任务状态
+func FinishTaskAndReport(id int) {
+	args := FinArgs{TaskId: id}
+	reply := FinReply{}
 
-	// declare a reply structure.
-	reply := TaskResponse{}
+	// 请求调用Master的UpdateTaskState方法
+	ok := call("Master.UpdateTaskState", &args, &reply)
+	if !ok { //请求失败
+		fmt.Println("Call failed!")
+	}
+}
 
-	// send the RPC request, wait for the reply.
+func CallGetTask(args *TaskRequest, reply *TaskResponse) {
 	call("Master.AssignTask", &args, &reply)
-
-	// reply.Y should be 100.
-	//fmt.Printf("reply.Name %s\n", reply.Task.InputFile[0])
 	for _, file := range reply.Task.InputFile {
-		fmt.Printf("worker %d got task:%s\n", reply.Task.TaskId, file)
+		fmt.Printf("got task[%d]:%s\n", reply.Task.TaskId, file)
 	}
 }
 

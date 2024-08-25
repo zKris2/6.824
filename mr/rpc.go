@@ -5,6 +5,15 @@ import (
 	"strconv"
 )
 
+// worker完成工作后调用RPC通知master更新任务状态的传入参数——传入要更新的taskId即可
+type FinArgs struct {
+	TaskId int
+}
+
+// worker完成工作后调用RPC通知master更新任务状态的返回参数——事实上不需要传出什么，master自己修改TaskMap中的对应任务状态即可
+type FinReply struct {
+}
+
 // worker请求master分配任务的reply标志，worker以此来判断需要进行的操作
 type ReqTaskReplyFlag int
 
@@ -17,7 +26,6 @@ const (
 
 // RPC请求master分配任务时的传入参数——事实上什么都不用传入，因为只是worker获取一个任务。判断分配什么类型的任务由Master根据执行阶段决定
 type TaskRequest struct {
-	X int
 }
 
 // RPC请求master分配任务时的返回参数——即返回一个Master分配的任务

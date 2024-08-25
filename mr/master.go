@@ -125,6 +125,19 @@ func (m *Master) checkMapTaskDone() bool {
 	return false
 }
 
+// 当worker完成任务时，会调用RPC通知master
+// master得知后负责修改worker完成任务的状态,以便master检查该阶段任务是否全部已完成
+func (m *Master) UpdateTaskState(args *FinArgs, reply *FinReply) error {
+	mutex.Lock()
+	defer mutex.Unlock()
+	id := args.TaskId
+	fmt.Printf("Task[%d] has been finished!\n", id)
+
+	// 由于创建任务时map任务和reduce任务被分配的taskId是唯一的，因此可以通过taskId在TaskMap中找到对应的Task
+	m.TaskMap[id].TaskState = Finshed // 将TaskMap中对应的Task状态修改为Finished
+	return nil
+}
+
 // Master给Worker分配任务的函数
 func (m *Master) AssignTask(args *TaskRequest, reply *TaskResponse) error {
 	// 分配任务需要上锁，防止多个worker竞争，保证并发安全，并用defer回退解锁
@@ -145,7 +158,7 @@ func (m *Master) AssignTask(args *TaskRequest, reply *TaskResponse) error {
 				taskp.TaskState = Working          // 将任务状态改为Working，代表已被分配给了worker
 				taskp.StartTime = time.Now()       // 更新任务开始执行的时间
 				m.TaskMap[(*taskp).TaskId] = taskp // 分配任务的同时将其加入TaskMap
-				fmt.Printf("Task[%d] has been assigned.\n", taskp.TaskId)
+				//fmt.Printf("Task[%d] has been assigned.\n", taskp.TaskId)
 			}
 		} else { // 没有未分配的map任务，检查map是否都执行完毕了，若是则Master转向reduce阶段
 			reply.Answer = WaitPlz // 本次请求暂无任务分配
