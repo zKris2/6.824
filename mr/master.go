@@ -205,8 +205,8 @@ func (m *Master) MakeReduceTask() {
 	fmt.Println("begin make reduce tasks...")
 	rn := m.ReducerNum
 	// Getwd返回一个对应当前工作目录的根路径
-	dir, _ := os.Getwd()
-	time.Sleep(10 * time.Second)
+	// dir, _ := os.Getwd()
+	dir := "mr-tmp"
 	files, err := os.ReadDir(dir) // files为当前目录下所有的文件
 	if err != nil {
 		fmt.Println(err)
@@ -237,7 +237,6 @@ func (m *Master) MakeReduceTask() {
 // Master生成Map任务
 func (m *Master) MakeMapTask(files []string) {
 	fmt.Println("begin make map tasks...")
-
 	// 遍历输入的文本文件，向map管道中加入map任务
 	for _, file := range files {
 		id := m.GenerateTaskId()

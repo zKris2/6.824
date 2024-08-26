@@ -41,7 +41,7 @@ func ihash(key string) int {
 func shuffle(files []string) []KeyValue {
 	kva := []KeyValue{}              // 存储该reduce任务所有输入的中间文件中的kv
 	for _, filename := range files { // reduce阶段每个worker的输入为若干个中间文件
-		file, err := os.Open(filename)
+		file, err := os.Open("mr-tmp/" + filename)
 		if err != nil {
 			log.Fatalf("cannot open %v", filename)
 		}
@@ -76,7 +76,8 @@ func PerformReduceTask(reducef func(string, []string) string, task *Task) {
 	// 为了确保没有人在出现崩溃的情况下观察到部分写入的文件，MapReduce论文提到了使用临时文件并在完成写入后原子地重命名它的技巧
 	// 使用 ioutil.TempFile 来创建一个临时文件以及 os.Rename 来原子性地重命名它
 
-	dir, _ := os.Getwd()
+	// dir, _ := os.Getwd()
+	dir := "out"
 	// CreateTemp 在目录dir中新建一个临时文件，打开文件进行读写，返回结果文件
 	// pattern 这是用于生成临时文件的名称。该名称是通过在模式的末尾附加一个随机字符串来创建的
 	tmpfile, err := os.CreateTemp(dir, "mr-out-tmpfile-")
