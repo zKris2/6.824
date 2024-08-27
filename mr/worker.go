@@ -94,7 +94,7 @@ func PerformReduceTask(reducef func(string, []string) string, task *Task) {
 			j++
 		}
 		values := []string{}     // len为0的切片
-		for k := i; k < j; k++ { // 最后values形如{1，1，1，...}
+		for k := i; k < j; k++ { // 最后values形如{"1"，"1"，"1"，...}
 			values = append(values, intermediate[k].Value)
 		}
 		output := reducef(intermediate[i].Key, values) // 调用传入的reduce函数，输出的结果是该单词在这些文本中出现的次数
@@ -109,8 +109,7 @@ func PerformReduceTask(reducef func(string, []string) string, task *Task) {
 
 	// reudce的输出文件，命名格式为：mr-out-*，其中*通过task记录的ReducerKth获取
 	oname := "mr-out-" + strconv.Itoa(task.ReducerKth)
-
-	os.Rename(dir+tmpfile.Name(), dir+oname)
+	os.Rename(tmpfile.Name(), dir+"/"+oname)
 }
 
 // 执行map任务
