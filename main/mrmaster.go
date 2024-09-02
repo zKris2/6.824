@@ -14,10 +14,11 @@ func main() {
 		os.Exit(0)
 	}
 
-	m := mr.MakeMaster(os.Args[1:], 10)
+	m := mr.MakeMaster(os.Args[1:], 3)
 	for !m.Done() {
 		time.Sleep(time.Second)
 	}
 
+	fmt.Println("Master gonna exit!")
 	time.Sleep(time.Second)
 }

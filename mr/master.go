@@ -64,6 +64,41 @@ type Master struct {
 	ReducerNum        int           // 传入的reducer的数量，用于hash
 }
 
+// master不能可靠地区分崩溃的工作线程、还活着但由于某种原因而停滞的工作线程和正在执行但速度太慢而无法使用的工作线程。
+// 可以让master等待一段时间（如10s），然后放弃并将任务重新分配给其他worker，在此之后，master应该认为那个worker已经死亡
+func (m *Master) CrashHandle() {
+	for {
+		time.Sleep(time.Second * 2)    // 每2秒做一次判断
+		mutex.Lock()                   // 访问master的共享资源先加锁
+		if m.CurrentPhase == AllDone { // 所有任务都完成了就不用再判断crash了
+			mutex.Unlock()
+			break
+		}
+		for _, task := range m.TaskMap {
+			// Since()函数保留时间值，并用于评估与实际时间的差异
+			// time.Since(t)等价于time.Now().Sub(t)
+			// 当任务处于Working状态持续10s以上时认为crash
+			if task.TaskState == Working && time.Since(task.StartTime) > 10*time.Second {
+				// fmt.Printf("Task[%d] is crashed!\n", task.TaskId)
+				// 将该任务重置当作未分配的任务重新加入MapTaskChannel等待分配
+				// StartTime会在任务重新被分配给worker时更新
+				task.TaskState = Waiting // 更新状态为待分配
+				switch task.TaskType {   // 加入对应的channel等待分配给其他worker
+				case MapTask:
+					fmt.Printf("MapTask[%d] crashed && rejoin!\n", task.TaskId)
+					m.MapTaskChannel <- task
+				case ReduceTask:
+					m.ReduceTaskChannel <- task
+					fmt.Printf("ReduceTask[%d] crashed && rejoin!\n", task.TaskId)
+				}
+				delete(m.TaskMap, task.TaskId) // 将crash的任务从TaskMap中删除，等到再分配时添加回来
+				// 这是因为保证TaskMap中只有分配给worker的Task记录（正在执行和已完成），未分配的Task放在channel里
+			}
+		}
+		mutex.Unlock()
+	}
+}
+
 // Master在判断当前阶段工作已完成后转入下一阶段
 func (m *Master) toNextPhase() {
 	switch m.CurrentPhase {
@@ -143,7 +178,7 @@ func (m *Master) AssignTask(args *TaskRequest, reply *TaskResponse) error {
 	// 分配任务需要上锁，防止多个worker竞争，保证并发安全，并用defer回退解锁
 	mutex.Lock()
 	defer mutex.Unlock()
-	fmt.Println("Master gets a request from worker:")
+	// fmt.Println("Master gets a request from worker:")
 
 	// Master根据当前执行阶段来判断执行什么操作
 	switch m.CurrentPhase {
@@ -158,12 +193,13 @@ func (m *Master) AssignTask(args *TaskRequest, reply *TaskResponse) error {
 				taskp.TaskState = Working          // 将任务状态改为Working，代表已被分配给了worker
 				taskp.StartTime = time.Now()       // 更新任务开始执行的时间
 				m.TaskMap[(*taskp).TaskId] = taskp // 分配任务的同时将其加入TaskMap
-				//fmt.Printf("Task[%d] has been assigned.\n", taskp.TaskId)
+				// fmt.Printf("Task[%d] has been assigned.\n", taskp.TaskId)
 			}
 		} else { // 没有未分配的map任务，检查map是否都执行完毕了，若是则Master转向reduce阶段
 			reply.Answer = WaitPlz // 本次请求暂无任务分配
 			// 检查map是否都执行完毕了
 			if m.checkMapTaskDone() { // map阶段任务都执行完了
+				fmt.Println("MapPhase is fished! ToNextPhase!")
 				m.toNextPhase() // 转向下一阶段
 			}
 			return nil
@@ -179,7 +215,7 @@ func (m *Master) AssignTask(args *TaskRequest, reply *TaskResponse) error {
 				taskp.TaskState = Working          // 将任务状态改为Working，代表已被分配给了worker
 				taskp.StartTime = time.Now()       // 更新任务开始执行的时间
 				m.TaskMap[(*taskp).TaskId] = taskp // 分配任务的同时将其加入TaskMap
-				fmt.Printf("Task[%d] has been assigned.\n", taskp.TaskId)
+				// fmt.Printf("Task[%d] has been assigned.\n", taskp.TaskId)
 			}
 		} else { // 没有未分配的reduce任务，检查reduce是否都执行完毕了，若是则Master转向AllDone阶段
 			reply.Answer = WaitPlz // 本次请求暂无任务分配
@@ -202,7 +238,7 @@ func (m *Master) AssignTask(args *TaskRequest, reply *TaskResponse) error {
 
 // Master生成Reduce任务
 func (m *Master) MakeReduceTask() {
-	fmt.Println("begin make reduce tasks...")
+	// fmt.Println("begin make reduce tasks...")
 	rn := m.ReducerNum
 	// Getwd返回一个对应当前工作目录的根路径
 	// dir, _ := os.Getwd()
@@ -229,14 +265,14 @@ func (m *Master) MakeReduceTask() {
 			ReducerNum: m.ReducerNum,
 			ReducerKth: i,
 		}
-		fmt.Printf("make a reduce task %d\n", id)
+		// fmt.Printf("make a reduce task %d\n", id)
 		m.ReduceTaskChannel <- &reduceTask
 	}
 }
 
 // Master生成Map任务
 func (m *Master) MakeMapTask(files []string) {
-	fmt.Println("begin make map tasks...")
+	// fmt.Println("begin make map tasks...")
 	// 遍历输入的文本文件，向map管道中加入map任务
 	for _, file := range files {
 		id := m.GenerateTaskId()
@@ -292,7 +328,7 @@ func (m *Master) Done() bool {
 }
 
 func MakeMaster(files []string, nReduce int) *Master {
-	fmt.Println("begin make a master...")
+	// fmt.Println("begin make a master...")
 	m := Master{
 		CurrentPhase:      MapPhase,                     // 开始为Map阶段
 		TaskIdForGen:      0,                            // 初始为0，后面通过自增得到唯一的TaskId分配任务
@@ -306,5 +342,8 @@ func MakeMaster(files []string, nReduce int) *Master {
 	m.MakeMapTask(files)
 
 	m.server()
+
+	go m.CrashHandle() // 开启探测并处理crash的协程
+
 	return &m
 }
